@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>Lobby</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ECRAN D'ACCUEIL : connexion au serveur + creation/rejoindre un salon -->
+  <div id="home-screen" class="screen">
+    <div class="home-wrap">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <h1>LOBBY</h1>
+      </div>
+      <p class="tagline">Salons texte &amp; vocal proteges par mot de passe.</p>
+
+      <div class="card">
+        <label class="field">
+          <span>Adresse du serveur</span>
+          <input id="server-url" type="text" placeholder="http://localhost:3000" value="https://lobby-2z23.onrender.com" />
+        </label>
+        <label class="field">
+          <span>Pseudo</span>
+          <input id="username" type="text" placeholder="Ton pseudo" maxlength="24" />
+        </label>
+
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="join">Rejoindre</button>
+          <button class="tab-btn" data-tab="create">Creer</button>
+        </div>
+
+        <div id="tab-join" class="tab-panel active">
+          <label class="field">
+            <span>Code du salon</span>
+            <input id="join-room-id" type="text" placeholder="ex: team-rex" />
+          </label>
+          <label class="field">
+            <span>Mot de passe</span>
+            <input id="join-password" type="password" placeholder="********" />
+          </label>
+          <button id="join-btn" class="primary-btn">Entrer dans le salon</button>
+        </div>
+
+        <div id="tab-create" class="tab-panel">
+          <label class="field">
+            <span>Code du salon (identifiant unique)</span>
+            <input id="create-room-id" type="text" placeholder="ex: team-rex" />
+          </label>
+          <label class="field">
+            <span>Nom affiche</span>
+            <input id="create-room-name" type="text" placeholder="ex: Equipe Rex" />
+          </label>
+          <label class="field">
+            <span>Mot de passe</span>
+            <input id="create-password" type="password" placeholder="********" />
+          </label>
+          <button id="create-btn" class="primary-btn">Creer le salon</button>
+        </div>
+
+        <p id="home-error" class="error-msg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ECRAN SALON : chat texte + panneau vocal -->
+  <div id="room-screen" class="screen hidden">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div>
+          <div class="room-name" id="room-name-label">Salon</div>
+          <div class="room-id" id="room-id-label">#code</div>
+        </div>
+        <button id="leave-btn" class="ghost-btn" title="Quitter le salon">Quitter</button>
+      </div>
+
+      <div class="voice-panel">
+        <div class="voice-panel-title">Vocal</div>
+        <button id="voice-toggle-btn" class="voice-btn">Rejoindre le vocal</button>
+        <button id="mute-btn" class="voice-btn secondary hidden">Couper le micro</button>
+        <div id="voice-members" class="voice-members"></div>
+      </div>
+
+      <div class="members-panel">
+        <div class="voice-panel-title">Membres</div>
+        <ul id="member-list"></ul>
+      </div>
+    </aside>
+
+    <main class="chat-area">
+      <div id="messages" class="messages"></div>
+      <form id="message-form" class="message-form">
+        <input id="message-input" type="text" placeholder="Ecris un message..." autocomplete="off" />
+        <button type="submit" class="primary-btn">Envoyer</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
