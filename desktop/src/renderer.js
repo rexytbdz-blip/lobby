@@ -8,8 +8,8 @@ let roomId = "";
 let localStream = null;
 let inVoice = false;
 let muted = false;
-const peers = {}; // { socketId: SimplePeer instance }
-const audioEls = {}; // { socketId: <audio> element }
+const peers = {};
+const audioEls = {};
 
 // ---------- Elements ----------
 const homeScreen = document.getElementById("home-screen");
@@ -30,13 +30,20 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
 function connectSocket() {
   const url = document.getElementById("server-url").value.trim();
   if (!url) {
-    homeError.textContent = "Renseigne l'adresse du serveur.";
+    homeError.textContent = window.i18n.t("err_server_url");
     return null;
   }
   if (socket) socket.disconnect();
   socket = io(url, { transports: ["websocket", "polling"] });
   attachSocketListeners();
   return socket;
+}
+
+// Traduit un code d'erreur renvoye par le serveur, avec repli sur le code brut
+function translateError(errorCode) {
+  const key = "err_" + errorCode.toLowerCase();
+  const translated = window.i18n.t(key);
+  return translated === key ? errorCode : translated;
 }
 
 document.getElementById("create-btn").addEventListener("click", () => {
@@ -48,16 +55,15 @@ document.getElementById("create-btn").addEventListener("click", () => {
   const password = document.getElementById("create-password").value;
 
   if (!rid || !password) {
-    homeError.textContent = "Code du salon et mot de passe requis.";
+    homeError.textContent = window.i18n.t("err_join_fields");
     return;
   }
 
   s.emit("create-room", { roomId: rid, roomName: rname, password, username }, (res) => {
     if (!res.ok) {
-      homeError.textContent = res.error;
+      homeError.textContent = translateError(res.errorCode);
       return;
     }
-    // Une fois cree, on rejoint directement
     joinRoom(rid, password);
   });
 });
@@ -69,7 +75,7 @@ document.getElementById("join-btn").addEventListener("click", () => {
   const rid = document.getElementById("join-room-id").value.trim();
   const password = document.getElementById("join-password").value;
   if (!rid || !password) {
-    homeError.textContent = "Code du salon et mot de passe requis.";
+    homeError.textContent = window.i18n.t("err_join_fields");
     return;
   }
   joinRoom(rid, password);
@@ -78,7 +84,7 @@ document.getElementById("join-btn").addEventListener("click", () => {
 function joinRoom(rid, password) {
   socket.emit("join-room", { roomId: rid, password, username }, (res) => {
     if (!res.ok) {
-      homeError.textContent = res.error;
+      homeError.textContent = translateError(res.errorCode);
       return;
     }
     roomId = rid;
@@ -131,7 +137,7 @@ function renderMemberList(members) {
   list.innerHTML = "";
   Object.values(members).forEach((m) => {
     const li = document.createElement("li");
-    li.textContent = m.username + (m.inVoice ? " (vocal)" : "");
+    li.textContent = m.username + (m.inVoice ? window.i18n.t("voice_suffix") : "");
     list.appendChild(li);
   });
 }
@@ -161,7 +167,7 @@ muteBtn.addEventListener("click", () => {
   if (!localStream) return;
   muted = !muted;
   localStream.getAudioTracks().forEach((t) => (t.enabled = !muted));
-  muteBtn.textContent = muted ? "Reactiver le micro" : "Couper le micro";
+  muteBtn.textContent = muted ? window.i18n.t("unmute_btn") : window.i18n.t("mute_btn");
   muteBtn.classList.toggle("muted", muted);
 });
 
@@ -169,15 +175,15 @@ async function joinVoice() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
-    alert("Impossible d'acceder au micro : " + err.message);
+    alert(window.i18n.t("err_mic") + err.message);
     return;
   }
   inVoice = true;
   muted = false;
-  voiceToggleBtn.textContent = "Quitter le vocal";
+  voiceToggleBtn.textContent = window.i18n.t("voice_leave_btn");
   voiceToggleBtn.classList.add("active");
   muteBtn.classList.remove("hidden");
-  muteBtn.textContent = "Couper le micro";
+  muteBtn.textContent = window.i18n.t("mute_btn");
   setupSpeakingDetector(socket.id || "local", localStream, true);
 
   socket.emit("join-voice");
@@ -186,7 +192,7 @@ async function joinVoice() {
 function leaveVoice() {
   if (!inVoice) return;
   inVoice = false;
-  voiceToggleBtn.textContent = "Rejoindre le vocal";
+  voiceToggleBtn.textContent = window.i18n.t("voice_join_btn");
   voiceToggleBtn.classList.remove("active");
   muteBtn.classList.add("hidden");
 
@@ -245,7 +251,6 @@ function addVoiceMemberUI(id, name) {
   document.getElementById("voice-members").appendChild(wrap);
 }
 
-// Detecte simplement si un flux audio "parle" (niveau sonore) pour animer l'orbe
 function setupSpeakingDetector(id, stream, isLocal) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -255,7 +260,7 @@ function setupSpeakingDetector(id, stream, isLocal) {
     source.connect(analyser);
     const data = new Uint8Array(analyser.frequencyBinCount);
 
-    if (isLocal) addVoiceMemberUI(id, username + " (toi)");
+    if (isLocal) addVoiceMemberUI(id, username + window.i18n.t("you_suffix"));
 
     function tick() {
       if (!inVoice) {
@@ -277,17 +282,16 @@ function setupSpeakingDetector(id, stream, isLocal) {
 // ---------- Ecouteurs socket ----------
 function attachSocketListeners() {
   socket.on("new-message", (m) => addMessage(m.username, m.text));
-  socket.on("system-message", (text) => addMessage(null, text, true));
+  socket.on("user-joined", ({ username: u }) => addMessage(null, window.i18n.t("sys_joined", { user: u }), true));
+  socket.on("user-left", ({ username: u }) => addMessage(null, window.i18n.t("sys_left", { user: u }), true));
   socket.on("member-list", (members) => renderMemberList(members));
 
-  // Un pair deja en vocal quand j'arrive -> j'initie la connexion vers lui
   socket.on("voice-peers", (peerList) => {
     peerList.forEach(({ id, username: uname }) => {
       createPeer(id, true, uname);
     });
   });
 
-  // Quelqu'un rejoint le vocal apres moi -> j'attends son offre (il initie vers moi)
   socket.on("voice-peer-joined", ({ id, username: uname }) => {
     if (inVoice) addVoiceMemberUI(id, uname);
   });
@@ -304,6 +308,6 @@ function attachSocketListeners() {
   });
 
   socket.on("connect_error", () => {
-    homeError.textContent = "Connexion au serveur impossible. Verifie l'adresse.";
+    homeError.textContent = window.i18n.t("err_connect_fail");
   });
 }
