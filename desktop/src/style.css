@@ -51,6 +51,17 @@ html, body {
 }
 .tagline { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
 
+.lang-select {
+  -webkit-app-region: no-drag;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin-inline-start: 10px;
+}
+
 .card {
   -webkit-app-region: no-drag;
   width: 360px;
@@ -122,7 +133,7 @@ html, body {
 .sidebar {
   width: 260px;
   background: var(--panel);
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   padding: 16px;
@@ -156,15 +167,8 @@ html, body {
 .voice-btn.secondary.muted { color: var(--danger); border-color: var(--danger); }
 
 .voice-members { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-.voice-member {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px; color: var(--text);
-}
-.voice-orb {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--muted);
-  transition: box-shadow 0.1s, background 0.1s;
-}
+.voice-member { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+.voice-orb { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: box-shadow 0.1s, background 0.1s; }
 .voice-orb.speaking { background: var(--accent); box-shadow: 0 0 8px 2px var(--accent); }
 
 .members-panel { overflow-y: auto; flex: 1; }
@@ -191,3 +195,10 @@ html, body {
 }
 .message-form input:focus { outline: none; border-color: var(--accent-dim); }
 .message-form .primary-btn { width: auto; padding: 0 20px; }
+
+/* ---------- Support de l'arabe (RTL) ---------- */
+html[dir="rtl"] body { direction: rtl; }
+html[dir="rtl"] .field input,
+html[dir="rtl"] .message-form input { text-align: right; font-family: var(--font); }
+html[dir="rtl"] .field input[type="password"] { font-family: var(--mono); }
+
