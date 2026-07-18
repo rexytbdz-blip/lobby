@@ -1,102 +1,159 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8" />
-<title>Lobby</title>
-<link rel="stylesheet" href="style.css" />
-</head>
-<body>
+// Serveur principal - gere les salons proteges par mot de passe,
+// le chat texte en temps reel, et le relais de signalisation WebRTC pour le vocal.
+// Les messages systeme et erreurs sont renvoyes sous forme de CODES,
+// pour que le client puisse les traduire dans la langue de l'utilisateur.
 
-  <!-- ECRAN D'ACCUEIL : connexion au serveur + creation/rejoindre un salon -->
-  <div id="home-screen" class="screen">
-    <div class="home-wrap">
-      <div class="brand">
-        <span class="brand-dot"></span>
-        <h1>LOBBY</h1>
-      </div>
-      <p class="tagline">Salons texte &amp; vocal proteges par mot de passe.</p>
+const express = require("express");
+const cors = require("cors");
+const http = require("http");
+const bcrypt = require("bcryptjs");
+const { Server } = require("socket.io");
 
-      <div class="card">
-        <label class="field">
-          <span>Adresse du serveur</span>
-          <input id="server-url" type="text" placeholder="http://localhost:3000" value="https://lobby-2z23.onrender.com" />
-        </label>
-        <label class="field">
-          <span>Pseudo</span>
-          <input id="username" type="text" placeholder="Ton pseudo" maxlength="24" />
-        </label>
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-        <div class="tabs">
-          <button class="tab-btn active" data-tab="join">Rejoindre</button>
-          <button class="tab-btn" data-tab="create">Creer</button>
-        </div>
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" },
+});
 
-        <div id="tab-join" class="tab-panel active">
-          <label class="field">
-            <span>Code du salon</span>
-            <input id="join-room-id" type="text" placeholder="ex: team-rex" />
-          </label>
-          <label class="field">
-            <span>Mot de passe</span>
-            <input id="join-password" type="password" placeholder="********" />
-          </label>
-          <button id="join-btn" class="primary-btn">Entrer dans le salon</button>
-        </div>
+const rooms = {};
+const MAX_MESSAGES_PER_ROOM = 200;
 
-        <div id="tab-create" class="tab-panel">
-          <label class="field">
-            <span>Code du salon (identifiant unique)</span>
-            <input id="create-room-id" type="text" placeholder="ex: team-rex" />
-          </label>
-          <label class="field">
-            <span>Nom affiche</span>
-            <input id="create-room-name" type="text" placeholder="ex: Equipe Rex" />
-          </label>
-          <label class="field">
-            <span>Mot de passe</span>
-            <input id="create-password" type="password" placeholder="********" />
-          </label>
-          <button id="create-btn" class="primary-btn">Creer le salon</button>
-        </div>
+function roomPublicInfo(roomId) {
+  const room = rooms[roomId];
+  if (!room) return null;
+  return {
+    roomId,
+    name: room.name,
+    memberCount: Object.keys(room.members).length,
+    voiceCount: Object.values(room.members).filter((m) => m.inVoice).length,
+  };
+}
 
-        <p id="home-error" class="error-msg"></p>
-      </div>
-    </div>
-  </div>
+app.get("/", (req, res) => {
+  res.json({ status: "ok", rooms: Object.keys(rooms).length });
+});
 
-  <!-- ECRAN SALON : chat texte + panneau vocal -->
-  <div id="room-screen" class="screen hidden">
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <div>
-          <div class="room-name" id="room-name-label">Salon</div>
-          <div class="room-id" id="room-id-label">#code</div>
-        </div>
-        <button id="leave-btn" class="ghost-btn" title="Quitter le salon">Quitter</button>
-      </div>
+app.get("/rooms", (req, res) => {
+  res.json(Object.keys(rooms).map(roomPublicInfo));
+});
 
-      <div class="voice-panel">
-        <div class="voice-panel-title">Vocal</div>
-        <button id="voice-toggle-btn" class="voice-btn">Rejoindre le vocal</button>
-        <button id="mute-btn" class="voice-btn secondary hidden">Couper le micro</button>
-        <div id="voice-members" class="voice-members"></div>
-      </div>
+io.on("connection", (socket) => {
+  let currentRoomId = null;
+  let currentUsername = null;
 
-      <div class="members-panel">
-        <div class="voice-panel-title">Membres</div>
-        <ul id="member-list"></ul>
-      </div>
-    </aside>
+  socket.on("create-room", async ({ roomId, roomName, password, username }, cb) => {
+    try {
+      if (!roomId || !password || !username) {
+        return cb({ ok: false, errorCode: "MISSING_FIELDS" });
+      }
+      if (rooms[roomId]) {
+        return cb({ ok: false, errorCode: "ROOM_EXISTS" });
+      }
+      const passwordHash = await bcrypt.hash(password, 10);
+      rooms[roomId] = {
+        name: roomName || roomId,
+        passwordHash,
+        messages: [],
+        members: {},
+      };
+      cb({ ok: true });
+    } catch (err) {
+      cb({ ok: false, errorCode: "SERVER_ERROR_CREATE" });
+    }
+  });
 
-    <main class="chat-area">
-      <div id="messages" class="messages"></div>
-      <form id="message-form" class="message-form">
-        <input id="message-input" type="text" placeholder="Ecris un message..." autocomplete="off" />
-        <button type="submit" class="primary-btn">Envoyer</button>
-      </form>
-    </main>
-  </div>
+  socket.on("join-room", async ({ roomId, password, username }, cb) => {
+    try {
+      const room = rooms[roomId];
+      if (!room) {
+        return cb({ ok: false, errorCode: "ROOM_NOT_FOUND" });
+      }
+      const valid = await bcrypt.compare(password || "", room.passwordHash);
+      if (!valid) {
+        return cb({ ok: false, errorCode: "WRONG_PASSWORD" });
+      }
 
-  <script src="renderer.js"></script>
-</body>
-</html>
+      if (currentRoomId && rooms[currentRoomId]) {
+        leaveRoom(socket, currentRoomId);
+      }
+
+      currentRoomId = roomId;
+      currentUsername = username || "Anonyme";
+      socket.join(roomId);
+      room.members[socket.id] = { username: currentUsername, inVoice: false };
+
+      socket.to(roomId).emit("user-joined", { username: currentUsername });
+      io.to(roomId).emit("member-list", room.members);
+
+      cb({
+        ok: true,
+        roomName: room.name,
+        messages: room.messages,
+        members: room.members,
+      });
+    } catch (err) {
+      cb({ ok: false, errorCode: "SERVER_ERROR_JOIN" });
+    }
+  });
+
+  socket.on("send-message", ({ text }) => {
+    if (!currentRoomId || !rooms[currentRoomId] || !text || !text.trim()) return;
+    const room = rooms[currentRoomId];
+    const message = {
+      username: currentUsername,
+      text: text.trim().slice(0, 2000),
+      timestamp: Date.now(),
+    };
+    room.messages.push(message);
+    if (room.messages.length > MAX_MESSAGES_PER_ROOM) room.messages.shift();
+    io.to(currentRoomId).emit("new-message", message);
+  });
+
+  socket.on("join-voice", () => {
+    if (!currentRoomId || !rooms[currentRoomId]) return;
+    const room = rooms[currentRoomId];
+    room.members[socket.id].inVoice = true;
+
+    const existingVoicePeers = Object.entries(room.members)
+      .filter(([id, m]) => id !== socket.id && m.inVoice)
+      .map(([id, m]) => ({ id, username: m.username }));
+
+    socket.emit("voice-peers", existingVoicePeers);
+    socket.to(currentRoomId).emit("voice-peer-joined", { id: socket.id, username: currentUsername });
+    io.to(currentRoomId).emit("member-list", room.members);
+  });
+
+  socket.on("leave-voice", () => {
+    if (!currentRoomId || !rooms[currentRoomId]) return;
+    const room = rooms[currentRoomId];
+    if (room.members[socket.id]) room.members[socket.id].inVoice = false;
+    socket.to(currentRoomId).emit("voice-peer-left", { id: socket.id });
+    io.to(currentRoomId).emit("member-list", room.members);
+  });
+
+  socket.on("voice-signal", ({ to, signal }) => {
+    io.to(to).emit("voice-signal", { from: socket.id, signal });
+  });
+
+  socket.on("disconnect", () => {
+    if (currentRoomId) leaveRoom(socket, currentRoomId);
+  });
+
+  function leaveRoom(socket, roomId) {
+    const room = rooms[roomId];
+    if (!room) return;
+    delete room.members[socket.id];
+    socket.leave(roomId);
+    socket.to(roomId).emit("voice-peer-left", { id: socket.id });
+    socket.to(roomId).emit("user-left", { username: currentUsername });
+    io.to(roomId).emit("member-list", room.members);
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Serveur Messenger demarre sur le port ${PORT}`);
+});
